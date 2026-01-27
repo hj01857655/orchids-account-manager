@@ -1,6 +1,17 @@
 # Orchids Account Manager
 
+<div align="center">
+
+[![Release](https://img.shields.io/github/v/release/hj01857655/orchids-account-manager?style=flat-square)](https://github.com/hj01857655/orchids-account-manager/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/hj01857655/orchids-account-manager/total?style=flat-square)](https://github.com/hj01857655/orchids-account-manager/releases)
+[![License](https://img.shields.io/badge/license-学习交流-blue?style=flat-square)](LICENSE)
+[![QQ群](https://img.shields.io/badge/QQ群-1025779377-blue?style=flat-square)](https://qm.qq.com/q/LtgykFYlqM)
+
 Orchids 账号管理工具，基于 Tauri 2 + React 19 + TypeScript 开发。
+
+</div>
+
+---
 
 ## 下载安装
 
