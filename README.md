@@ -58,6 +58,55 @@ Orchids 账号管理工具，基于 Tauri 2 + React 19 + TypeScript 开发。
 | 样式 | CSS + Framer Motion |
 | 图标 | Lucide React |
 
+## 开发
+
+### 环境要求
+
+- Node.js 20+
+- Rust 1.70+
+- Tauri CLI
+
+### 开发流程
+
+```bash
+# 安装依赖
+npm install
+
+# 开发模式（热重载）
+npm run tauri dev
+
+# 构建生产版本
+npm run tauri build
+
+# 代码检查
+cargo clippy  # Rust 代码检查
+npm run build # TypeScript 类型检查
+```
+
+## 项目结构
+
+```
+src/                    # 前端代码
+├── components/         # 组件
+├── pages/              # 页面（懒加载）
+├── hooks/              # 自定义 Hooks
+├── types/              # 类型定义
+└── services/           # 服务层
+
+src-tauri/              # Rust 后端
+├── src/commands/       # Tauri 命令
+└── capabilities/       # 权限配置
+```
+
+## 双仓库原则
+
+本项目遵循双仓库原则：
+
+- **私有仓库 dev 分支**（`orchids-account-manager_dev/dev`）：用于源码开发
+- **公开仓库**（`orchids-account-manager`）：仅用于发布 Release
+
+详见：[发布流程](docs/PRIVATE_REPO_RELEASE.md)
+
 ## 社区交流
 
 - **QQ 群**: [Orchids 交流群 - 1025779377](https://qm.qq.com/q/LtgykFYlqM)
@@ -66,3 +115,9 @@ Orchids 账号管理工具，基于 Tauri 2 + React 19 + TypeScript 开发。
 ## 许可证
 
 本项目仅供学习交流使用，请勿用于商业用途。
+
+## 文档
+
+- [开发规范](docs/DEVELOPMENT_SPEC.md)
+- [发布流程](docs/PRIVATE_REPO_RELEASE.md)
+- [Tauri 2 发布工作流](docs/TAURI2_RELEASE_WORKFLOW.md)
