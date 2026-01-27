@@ -13,6 +13,7 @@ permissions:
 jobs:
   build:
     strategy:
+      fail-fast: false  # 一个平台失败不影响其他平台
       matrix:
         include:
           - os: windows-latest
@@ -23,6 +24,8 @@ jobs:
             target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60  # 设置超时避免卡住
+    
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,6 +36,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'  # 缓存 npm 依赖
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -43,8 +47,9 @@ jobs:
         with:
           workspaces: src-tauri
           cache-on-failure: true
+          shared-key: ${{ matrix.target }}  # 按平台分别缓存
 
-      - name: Install dependencies (Linux)
+      - name: Install system dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
@@ -66,6 +71,7 @@ jobs:
             src-tauri/target/release/bundle/deb/*.deb
             src-tauri/target/release/bundle/rpm/*.rpm
             src-tauri/target/release/bundle/appimage/*.AppImage
+          retention-days: 7  # 产物保留 7 天
 
   release:
     needs: build
@@ -80,6 +86,25 @@ jobs:
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
+          body: |
+            ## 📦 安装包下载
+            
+            ### Windows
+            - `orchids-account-manager_${{ github.event.inputs.version }}_x64-setup.msi`
+            
+            ### macOS
+            - `orchids-account-manager_${{ github.event.inputs.version }}_aarch64.dmg`
+            
+            ### Linux
+            - `.deb` - Debian/Ubuntu
+            - `.rpm` - RedHat/Fedora/CentOS
+            - `.AppImage` - 通用 Linux
+            
+            ---
+            
+            构建时间: ${{ github.event.repository.updated_at }}
           files: artifacts/**/*
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
