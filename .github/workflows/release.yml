@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          repository: hj01857655/orchids-account-manager_dev
+          repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
 
