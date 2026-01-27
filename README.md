@@ -49,7 +49,7 @@ Orchids 账号管理工具，基于 Tauri 2 + React 19 + TypeScript 开发。
 
 ## 社区交流
 
-- **QQ 群**: 1025779377
+- **QQ 群**: [Orchids 交流群 - 1025779377](https://qm.qq.com/q/LtgykFYlqM)
 - **GitHub**: [@hj01857655](https://github.com/hj01857655)
 
 ## 许可证
