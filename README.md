@@ -119,7 +119,21 @@ chmod +x orchids-account-manager_x.x.x_amd64.AppImage
 A: 这是正常现象，因为应用未签名。点击"更多信息" → "仍要运行"即可。
 
 ### Q: macOS 提示"无法打开，因为无法验证开发者"？
-A: 右键点击应用 → 选择"打开" → 在弹出的对话框中点击"打开"。或者在"系统偏好设置 > 安全性与隐私"中允许。
+A: 有两种解决方法：
+
+**方法 1（推荐）**：使用终端移除隔离属性
+```bash
+# 进入 Applications 目录
+cd /Applications
+
+# 移除隔离属性
+sudo xattr -rd com.apple.quarantine "Orchids Account Manager.app"
+```
+
+**方法 2**：手动允许
+1. 右键点击应用 → 选择"打开"
+2. 在弹出的对话框中点击"打开"
+3. 或在"系统偏好设置 > 安全性与隐私"中允许
 
 ### Q: 账号数据存储在哪里？
 A: 
