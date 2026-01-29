@@ -13,38 +13,20 @@ permissions:
 jobs:
   build:
     strategy:
-      fail-fast: false  # 一个平台失败不影响其他平台
+      fail-fast: false
       matrix:
         include:
-          # Windows
           - os: windows-latest
             target: x86_64-pc-windows-msvc
-            arch: x64
-          - os: windows-latest
-            target: i686-pc-windows-msvc
-            arch: x86
-          - os: windows-latest
-            target: aarch64-pc-windows-msvc
-            arch: arm64
-          
-          # macOS
           - os: macos-latest
             target: aarch64-apple-darwin
-            arch: aarch64
           - os: macos-latest
             target: x86_64-apple-darwin
-            arch: x64
-          
-          # Linux
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            arch: x64
-          - os: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            arch: arm64
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60  # 设置超时避免卡住
+    timeout-minutes: 60
     
     steps:
       - uses: actions/checkout@v4
@@ -52,7 +34,7 @@ jobs:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
-          fetch-depth: 0  # 获取完整历史，用于生成 release notes
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -67,39 +49,36 @@ jobs:
         with:
           workspaces: src-tauri
           cache-on-failure: true
-          shared-key: ${{ matrix.target }}  # 按平台分别缓存
+          shared-key: ${{ matrix.target }}
 
       - name: Install system dependencies (Linux)
         if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-          
-          # ARM64 交叉编译依赖
-          if [ "${{ matrix.target }}" = "aarch64-unknown-linux-gnu" ]; then
-            sudo apt-get install -y gcc-aarch64-linux-gnu
-          fi
 
       - name: Install npm dependencies
         run: npm install
 
       - name: Build Tauri app
         run: npm run tauri build -- --target ${{ matrix.target }}
-        env:
-          # ARM64 交叉编译配置
-          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: tauri-${{ matrix.os }}-${{ matrix.arch }}
+          name: tauri-${{ matrix.os }}-${{ matrix.target }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi
+            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi.zip
+            src-tauri/target/${{ matrix.target }}/release/bundle/msi/*.msi.zip.sig
             src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz.sig
             src-tauri/target/${{ matrix.target }}/release/bundle/deb/*.deb
-            src-tauri/target/${{ matrix.target }}/release/bundle/rpm/*.rpm
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage
-          retention-days: 7  # 产物保留 7 天
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz
+            src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz.sig
+          retention-days: 7
 
   release:
     needs: build
@@ -110,7 +89,7 @@ jobs:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
-          fetch-depth: 0  # 获取完整历史
+          fetch-depth: 0
 
       - uses: actions/download-artifact@v4
         with:
@@ -119,7 +98,6 @@ jobs:
       - name: Generate Release Notes
         id: release_notes
         run: |
-          # 获取上一个 tag
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -z "$PREVIOUS_TAG" ]; then
@@ -130,25 +108,20 @@ jobs:
             COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges)
           fi
           
-          # 只保留 feat: 和 fix: 开头的提交
           FEATURES=$(echo "$COMMITS" | grep "^- feat:" | sed 's/^- feat: /- /' || true)
           FIXES=$(echo "$COMMITS" | grep "^- fix:" | sed 's/^- fix: /- /' || true)
           
-          # 生成 release notes
           NOTES="## 📦 安装包下载
 
           ### Windows
-          - \`*_x64-setup.msi\` - 64位 (推荐)
-          - \`*_x86-setup.msi\` - 32位
-          - \`*_arm64-setup.msi\` - ARM64
-          
+          - \`*_x64-setup.msi\` - 64位
+
           ### macOS
           - \`*_aarch64.dmg\` - Apple Silicon (M1/M2/M3)
           - \`*_x64.dmg\` - Intel 芯片
-          
+
           ### Linux
-          - \`*.deb\` - Debian/Ubuntu (x64/arm64)
-          - \`*.rpm\` - RedHat/Fedora/CentOS
+          - \`*.deb\` - Debian/Ubuntu
           - \`*.AppImage\` - 通用 Linux
           
           ---
@@ -170,7 +143,6 @@ jobs:
           $FIXES"
           fi
           
-          # 如果没有任何功能更新，显示提示
           if [ -z "$FEATURES" ] && [ -z "$FIXES" ]; then
             NOTES="$NOTES
 
@@ -183,13 +155,50 @@ jobs:
           
           构建时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
           
-          # 保存到文件
           echo "$NOTES" > release_notes.md
           
-          # 输出到 GitHub Actions
           echo "notes<<EOF" >> $GITHUB_OUTPUT
           echo "$NOTES" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Generate latest.json
+        run: |
+          VERSION="${{ github.event.inputs.version }}"
+          
+          # 查找更新文件
+          WINDOWS_SIG=$(find artifacts -name "*.msi.zip.sig" -type f | head -1)
+          MACOS_AARCH64_SIG=$(find artifacts -name "*aarch64*.app.tar.gz.sig" -type f | head -1)
+          MACOS_X64_SIG=$(find artifacts -name "*x86_64*.app.tar.gz.sig" -type f | head -1)
+          LINUX_SIG=$(find artifacts -name "*.AppImage.tar.gz.sig" -type f | head -1)
+          
+          # 生成 latest.json
+          cat > latest.json << EOF
+          {
+            "version": "${VERSION}",
+            "notes": "查看完整更新日志: https://github.com/hj01857655/orchids-account-manager/releases/tag/${VERSION}",
+            "pub_date": "$(date -u '+%Y-%m-%dT%H:%M:%SZ')",
+            "platforms": {
+              "windows-x86_64": {
+                "signature": "$(cat $WINDOWS_SIG 2>/dev/null || echo '')",
+                "url": "https://github.com/hj01857655/orchids-account-manager/releases/download/${VERSION}/$(basename ${WINDOWS_SIG%.sig} 2>/dev/null || echo '')"
+              },
+              "darwin-aarch64": {
+                "signature": "$(cat $MACOS_AARCH64_SIG 2>/dev/null || echo '')",
+                "url": "https://github.com/hj01857655/orchids-account-manager/releases/download/${VERSION}/$(basename ${MACOS_AARCH64_SIG%.sig} 2>/dev/null || echo '')"
+              },
+              "darwin-x86_64": {
+                "signature": "$(cat $MACOS_X64_SIG 2>/dev/null || echo '')",
+                "url": "https://github.com/hj01857655/orchids-account-manager/releases/download/${VERSION}/$(basename ${MACOS_X64_SIG%.sig} 2>/dev/null || echo '')"
+              },
+              "linux-x86_64": {
+                "signature": "$(cat $LINUX_SIG 2>/dev/null || echo '')",
+                "url": "https://github.com/hj01857655/orchids-account-manager/releases/download/${VERSION}/$(basename ${LINUX_SIG%.sig} 2>/dev/null || echo '')"
+              }
+            }
+          }
+          EOF
+          
+          cat latest.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
@@ -197,7 +206,9 @@ jobs:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
           body: ${{ steps.release_notes.outputs.notes }}
-          files: artifacts/**/*
+          files: |
+            artifacts/**/*
+            latest.json
           draft: false
           prerelease: false
         env:
