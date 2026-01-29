@@ -97,21 +97,15 @@ jobs:
           
           if [ -z "$PREVIOUS_TAG" ]; then
             echo "这是第一个版本"
-            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+            COMMITS=$(git log --pretty=format:"- %s" --no-merges)
           else
             echo "上一个版本: $PREVIOUS_TAG"
-            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges)
           fi
           
-          # 过滤掉 docs: 开头的提交
-          FILTERED_COMMITS=$(echo "$COMMITS" | grep -v "^- docs:" || true)
-          
-          # 按类型分组
-          FEATURES=$(echo "$FILTERED_COMMITS" | grep "^- feat:" || true)
-          FIXES=$(echo "$FILTERED_COMMITS" | grep "^- fix:" || true)
-          REFACTORS=$(echo "$FILTERED_COMMITS" | grep "^- refactor:" || true)
-          CHORES=$(echo "$FILTERED_COMMITS" | grep "^- chore:" || true)
-          OTHERS=$(echo "$FILTERED_COMMITS" | grep -v "^- feat:" | grep -v "^- fix:" | grep -v "^- refactor:" | grep -v "^- chore:" || true)
+          # 只保留 feat: 和 fix: 开头的提交
+          FEATURES=$(echo "$COMMITS" | grep "^- feat:" | sed 's/^- feat: /- /' || true)
+          FIXES=$(echo "$COMMITS" | grep "^- fix:" | sed 's/^- fix: /- /' || true)
           
           # 生成 release notes
           NOTES="## 📦 安装包下载
@@ -146,25 +140,11 @@ jobs:
           $FIXES"
           fi
           
-          if [ -n "$REFACTORS" ]; then
+          # 如果没有任何功能更新，显示提示
+          if [ -z "$FEATURES" ] && [ -z "$FIXES" ]; then
             NOTES="$NOTES
 
-          ### ♻️ 代码重构
-          $REFACTORS"
-          fi
-          
-          if [ -n "$CHORES" ]; then
-            NOTES="$NOTES
-
-          ### 🔧 其他改动
-          $CHORES"
-          fi
-          
-          if [ -n "$OTHERS" ]; then
-            NOTES="$NOTES
-
-          ### 📌 其他
-          $OTHERS"
+          本次发布主要包含内部优化和代码改进。"
           fi
           
           NOTES="$NOTES
