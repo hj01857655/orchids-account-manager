@@ -34,12 +34,11 @@ jobs:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
-          fetch-depth: 1  # 只获取最新提交
+          fetch-depth: 1
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'  # 缓存 npm 依赖
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -59,13 +58,13 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install npm dependencies
-        run: npm ci  # 使用 ci 而不是 install，更快
+        run: npm install
 
       - name: Build Tauri app
         run: npm run tauri build -- --target ${{ matrix.target }}
         env:
-          CARGO_INCREMENTAL: 1  # 启用增量编译
-          CARGO_PROFILE_RELEASE_LTO: false  # 禁用 LTO 加快编译
+          CARGO_INCREMENTAL: 1
+          CARGO_PROFILE_RELEASE_LTO: false
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -83,7 +82,7 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz.sig
           retention-days: 7
-          compression-level: 0  # 不压缩，加快上传
+          compression-level: 0
 
   release:
     needs: build
