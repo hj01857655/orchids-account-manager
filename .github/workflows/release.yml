@@ -32,6 +32,7 @@ jobs:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
+          fetch-depth: 0  # 获取完整历史，用于生成 release notes
 
       - uses: actions/setup-node@v4
         with:
@@ -77,32 +78,115 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ secrets.PRIVATE_REPO }}
+          ref: dev
+          token: ${{ secrets.PAT }}
+          fetch-depth: 0  # 获取完整历史
+
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+
+      - name: Generate Release Notes
+        id: release_notes
+        run: |
+          # 获取上一个 tag
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          
+          if [ -z "$PREVIOUS_TAG" ]; then
+            echo "这是第一个版本"
+            COMMITS=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            echo "上一个版本: $PREVIOUS_TAG"
+            COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          
+          # 过滤掉 docs: 开头的提交
+          FILTERED_COMMITS=$(echo "$COMMITS" | grep -v "^- docs:" || true)
+          
+          # 按类型分组
+          FEATURES=$(echo "$FILTERED_COMMITS" | grep "^- feat:" || true)
+          FIXES=$(echo "$FILTERED_COMMITS" | grep "^- fix:" || true)
+          REFACTORS=$(echo "$FILTERED_COMMITS" | grep "^- refactor:" || true)
+          CHORES=$(echo "$FILTERED_COMMITS" | grep "^- chore:" || true)
+          OTHERS=$(echo "$FILTERED_COMMITS" | grep -v "^- feat:" | grep -v "^- fix:" | grep -v "^- refactor:" | grep -v "^- chore:" || true)
+          
+          # 生成 release notes
+          NOTES="## 📦 安装包下载
+
+          ### Windows
+          - \`orchids-account-manager_${{ github.event.inputs.version }}_x64-setup.msi\`
+          
+          ### macOS
+          - \`orchids-account-manager_${{ github.event.inputs.version }}_aarch64.dmg\`
+          
+          ### Linux
+          - \`.deb\` - Debian/Ubuntu
+          - \`.rpm\` - RedHat/Fedora/CentOS
+          - \`.AppImage\` - 通用 Linux
+          
+          ---
+          
+          ## 📝 更新内容
+          "
+          
+          if [ -n "$FEATURES" ]; then
+            NOTES="$NOTES
+
+          ### ✨ 新功能
+          $FEATURES"
+          fi
+          
+          if [ -n "$FIXES" ]; then
+            NOTES="$NOTES
+
+          ### 🐛 Bug 修复
+          $FIXES"
+          fi
+          
+          if [ -n "$REFACTORS" ]; then
+            NOTES="$NOTES
+
+          ### ♻️ 代码重构
+          $REFACTORS"
+          fi
+          
+          if [ -n "$CHORES" ]; then
+            NOTES="$NOTES
+
+          ### 🔧 其他改动
+          $CHORES"
+          fi
+          
+          if [ -n "$OTHERS" ]; then
+            NOTES="$NOTES
+
+          ### 📌 其他
+          $OTHERS"
+          fi
+          
+          NOTES="$NOTES
+
+          ---
+          
+          构建时间: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          
+          # 保存到文件
+          echo "$NOTES" > release_notes.md
+          
+          # 输出到 GitHub Actions
+          echo "notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
         with:
           tag_name: ${{ github.event.inputs.version }}
           name: Release ${{ github.event.inputs.version }}
-          body: |
-            ## 📦 安装包下载
-            
-            ### Windows
-            - `orchids-account-manager_${{ github.event.inputs.version }}_x64-setup.msi`
-            
-            ### macOS
-            - `orchids-account-manager_${{ github.event.inputs.version }}_aarch64.dmg`
-            
-            ### Linux
-            - `.deb` - Debian/Ubuntu
-            - `.rpm` - RedHat/Fedora/CentOS
-            - `.AppImage` - 通用 Linux
-            
-            ---
-            
-            构建时间: ${{ github.event.repository.updated_at }}
+          body: ${{ steps.release_notes.outputs.notes }}
           files: artifacts/**/*
           draft: false
           prerelease: false
