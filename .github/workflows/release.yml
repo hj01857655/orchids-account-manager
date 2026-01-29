@@ -26,7 +26,7 @@ jobs:
             target: x86_64-unknown-linux-gnu
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 45
     
     steps:
       - uses: actions/checkout@v4
@@ -34,11 +34,12 @@ jobs:
           repository: ${{ secrets.PRIVATE_REPO }}
           ref: dev
           token: ${{ secrets.PAT }}
-          fetch-depth: 0
+          fetch-depth: 1  # 只获取最新提交
 
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+          cache: 'npm'  # 缓存 npm 依赖
 
       - uses: dtolnay/rust-toolchain@stable
         with:
@@ -58,10 +59,13 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Install npm dependencies
-        run: npm install
+        run: npm ci  # 使用 ci 而不是 install，更快
 
       - name: Build Tauri app
         run: npm run tauri build -- --target ${{ matrix.target }}
+        env:
+          CARGO_INCREMENTAL: 1  # 启用增量编译
+          CARGO_PROFILE_RELEASE_LTO: false  # 禁用 LTO 加快编译
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -79,6 +83,7 @@ jobs:
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz
             src-tauri/target/${{ matrix.target }}/release/bundle/appimage/*.AppImage.tar.gz.sig
           retention-days: 7
+          compression-level: 0  # 不压缩，加快上传
 
   release:
     needs: build
@@ -101,10 +106,8 @@ jobs:
           PREVIOUS_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           
           if [ -z "$PREVIOUS_TAG" ]; then
-            echo "这是第一个版本"
             COMMITS=$(git log --pretty=format:"- %s" --no-merges)
           else
-            echo "上一个版本: $PREVIOUS_TAG"
             COMMITS=$(git log ${PREVIOUS_TAG}..HEAD --pretty=format:"- %s" --no-merges)
           fi
           
@@ -165,13 +168,11 @@ jobs:
         run: |
           VERSION="${{ github.event.inputs.version }}"
           
-          # 查找更新文件
           WINDOWS_SIG=$(find artifacts -name "*.msi.zip.sig" -type f | head -1)
           MACOS_AARCH64_SIG=$(find artifacts -name "*aarch64*.app.tar.gz.sig" -type f | head -1)
           MACOS_X64_SIG=$(find artifacts -name "*x86_64*.app.tar.gz.sig" -type f | head -1)
           LINUX_SIG=$(find artifacts -name "*.AppImage.tar.gz.sig" -type f | head -1)
           
-          # 生成 latest.json
           cat > latest.json << EOF
           {
             "version": "${VERSION}",
@@ -197,8 +198,6 @@ jobs:
             }
           }
           EOF
-          
-          cat latest.json
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
